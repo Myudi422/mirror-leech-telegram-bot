@@ -1,4 +1,4 @@
-from aiofiles.os import path as aiopath
+from aiofiles.os import path as aiopath, remove
 from base64 import b64encode
 from pyrogram.filters import command
 from pyrogram.handlers import MessageHandler
@@ -22,16 +22,16 @@ from bot.helper.ext_utils.links_utils import (
     is_gdrive_id,
 )
 from bot.helper.listeners.task_listener import TaskListener
-from bot.helper.mirror_utils.download_utils.aria2_download import add_aria2c_download
-from bot.helper.mirror_utils.download_utils.direct_downloader import add_direct_download
-from bot.helper.mirror_utils.download_utils.direct_link_generator import (
+from bot.helper.mirror_leech_utils.download_utils.aria2_download import add_aria2c_download
+from bot.helper.mirror_leech_utils.download_utils.direct_downloader import add_direct_download
+from bot.helper.mirror_leech_utils.download_utils.direct_link_generator import (
     direct_link_generator,
 )
-from bot.helper.mirror_utils.download_utils.gd_download import add_gd_download
-from bot.helper.mirror_utils.download_utils.jd_download import add_jd_download
-from bot.helper.mirror_utils.download_utils.qbit_download import add_qb_torrent
-from bot.helper.mirror_utils.download_utils.rclone_download import add_rclone_download
-from bot.helper.mirror_utils.download_utils.telegram_download import (
+from bot.helper.mirror_leech_utils.download_utils.gd_download import add_gd_download
+from bot.helper.mirror_leech_utils.download_utils.jd_download import add_jd_download
+from bot.helper.mirror_leech_utils.download_utils.qbit_download import add_qb_torrent
+from bot.helper.mirror_leech_utils.download_utils.rclone_download import add_rclone_download
+from bot.helper.mirror_leech_utils.download_utils.telegram_download import (
     TelegramDownloadHelper,
 )
 from bot.helper.telegram_helper.bot_commands import BotCommands
@@ -239,7 +239,7 @@ class Mirror(TaskListener):
                     reply_to = None
             elif reply_to.document and (
                 file_.mime_type == "application/x-bittorrent"
-                or file_.file_name.endswith(".torrent")
+                or file_.file_name.endswith((".torrent", ".dlc"))
             ):
                 self.link = await reply_to.download()
                 file_ = None
@@ -311,6 +311,9 @@ class Mirror(TaskListener):
                 await sendMessage(self.message, f"{e}".strip())
                 self.removeFromSameDir()
                 return
+            finally:
+                if await aiopath.exists(self.link):
+                    await remove(self.link)
         elif self.isQbit:
             await add_qb_torrent(self, path, ratio, seed_time)
         elif is_rclone_path(self.link):

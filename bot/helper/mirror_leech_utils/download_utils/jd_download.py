@@ -23,7 +23,9 @@ from bot.helper.ext_utils.task_manager import (
     stop_duplicate_check,
 )
 from bot.helper.listeners.jdownloader_listener import onDownloadStart
-from bot.helper.mirror_leech_utils.status_utils.jdownloader_status import JDownloaderStatus
+from bot.helper.mirror_leech_utils.status_utils.jdownloader_status import (
+    JDownloaderStatus,
+)
 from bot.helper.mirror_leech_utils.status_utils.queue_status import QueueStatus
 from bot.helper.telegram_helper.button_build import ButtonMaker
 from bot.helper.telegram_helper.message_utils import (
@@ -99,6 +101,7 @@ async def add_jd_download(listener, path):
             if not is_connected:
                 await listener.onDownloadError(jdownloader.error)
                 return
+            jdownloader.boot()
             await jdownloader.connectToDevice()
 
         if not jd_downloads:
@@ -115,7 +118,7 @@ async def add_jd_download(listener, path):
             jdownloader.device.linkgrabber.query_packages, [{}]
         ):
             odl_list = [
-                od["uuid"] for od in odl if od["saveTo"].startswith("/root/Downloads/")
+                od["uuid"] for od in odl if od.get("saveTo", "").startswith("/root/Downloads/")
             ]
             if odl_list:
                 await retry_function(
@@ -133,15 +136,15 @@ async def add_jd_download(listener, path):
             )
         else:
             await retry_function(
-            jdownloader.device.linkgrabber.add_links,
-            [
-                {
-                    "autoExtract": False,
-                    "links": listener.link,
-                    "packageName": listener.name or None,
-                }
-            ],
-        )
+                jdownloader.device.linkgrabber.add_links,
+                [
+                    {
+                        "autoExtract": False,
+                        "links": listener.link,
+                        "packageName": listener.name or None,
+                    }
+                ],
+            )
 
         await sleep(0.5)
         while await retry_function(jdownloader.device.linkgrabber.is_collecting):
@@ -290,7 +293,7 @@ async def add_jd_download(listener, path):
         package_ids=online_packages,
     )
 
-    await sleep(0.5)
+    await sleep(1)
 
     download_packages = await retry_function(
         jdownloader.device.downloads.query_packages,

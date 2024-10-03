@@ -19,7 +19,8 @@ from .help_messages import (
 )
 
 COMMAND_USAGE = {}
-THREADPOOL = ThreadPoolExecutor(max_workers=99999)
+
+THREAD_POOL = ThreadPoolExecutor(max_workers=3000)
 
 
 class SetInterval:
@@ -102,6 +103,8 @@ def arg_parser(items, arg_base):
         "-fu",
         "-sync",
         "-ml",
+        "-doc",
+        "-med"
     }
     t = len(items)
     i = 0
@@ -115,7 +118,7 @@ def arg_parser(items, arg_base):
             if (
                 i + 1 == t
                 and part in bool_arg_set
-                or part in ["-s", "-j", "-f", "-fd", "-fu", "-sync", "-ml"]
+                or part in ["-s", "-j", "-f", "-fd", "-fu", "-sync", "-ml", "-doc", "-med"]
             ):
                 arg_base[part] = True
             else:
@@ -192,30 +195,18 @@ async def cmd_exec(cmd, shell=False):
     return stdout, stderr, proc.returncode
 
 
-def handler_new_task(func):
-    @wraps(func)
-    async def wrapper(*args, **kwargs):
-        bot_loop.create_task(func(*args, **kwargs))
-
-        async def dummy():
-            pass
-
-        return dummy
-
-    return wrapper
-
-
 def new_task(func):
     @wraps(func)
     async def wrapper(*args, **kwargs):
-        return bot_loop.create_task(func(*args, **kwargs))
+        task = bot_loop.create_task(func(*args, **kwargs))
+        return task
 
     return wrapper
 
 
 async def sync_to_async(func, *args, wait=True, **kwargs):
     pfunc = partial(func, *args, **kwargs)
-    future = bot_loop.run_in_executor(THREADPOOL, pfunc)
+    future = bot_loop.run_in_executor(THREAD_POOL, pfunc)
     return await future if wait else future
 
 

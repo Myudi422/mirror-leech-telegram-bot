@@ -9,11 +9,7 @@ from pyrogram.handlers import CallbackQueryHandler
 from time import time
 
 from bot import LOGGER, config_dict
-from ...ext_utils.bot_utils import (
-    cmd_exec,
-    handler_new_task,
-    update_user_ldata,
-)
+from ...ext_utils.bot_utils import cmd_exec, update_user_ldata, new_task
 from ...ext_utils.db_handler import database
 from ...ext_utils.status_utils import get_readable_file_size, get_readable_time
 from ...telegram_helper.button_build import ButtonMaker
@@ -26,7 +22,7 @@ from ...telegram_helper.message_utils import (
 LIST_LIMIT = 6
 
 
-@handler_new_task
+@new_task
 async def path_updates(_, query, obj):
     await query.answer()
     message = query.message
@@ -47,6 +43,9 @@ async def path_updates(_, query, obj):
     elif data[1] == "nex":
         obj.iter_start += LIST_LIMIT * obj.page_step
         await obj.get_path_buttons()
+    elif data[1] == "select":
+        obj.select = not obj.select
+        await obj.get_path_buttons()
     elif data[1] == "back":
         if data[2] == "re":
             await obj.list_config()
@@ -57,8 +56,31 @@ async def path_updates(_, query, obj):
         data = query.data.split(maxsplit=2)
         obj.remote = data[2]
         await obj.get_path()
+    elif data[1] == "clear":
+        obj.selected_pathes = set()
+        await obj.get_path_buttons()
+    elif data[1] == "ds":
+        obj.path = f"rclone_select_{time()}.txt"
+        async with aiopen(obj.path, "w") as txt_file:
+            for f in obj.selected_pathes:
+                await txt_file.write(f"{f}\n")
+        await delete_message(message)
+        obj.event.set()
     elif data[1] == "pa":
         index = int(data[3])
+        if obj.select:
+            path = obj.path + (
+                f"/{obj.path_list[index]['Path']}"
+                if obj.path
+                else obj.path_list[index]["Path"]
+            )
+            if path in obj.selected_pathes:
+                obj.selected_pathes.remove(path)
+            else:
+                obj.selected_pathes.add(path)
+            await obj.get_path_buttons()
+            obj.query_proc = False
+            return
         obj.path += (
             f"/{obj.path_list[index]['Path']}"
             if obj.path
@@ -71,6 +93,7 @@ async def path_updates(_, query, obj):
             obj.event.set()
     elif data[1] == "ps":
         if obj.page_step == int(data[2]):
+            obj.query_proc = False
             return
         obj.page_step = int(data[2])
         await obj.get_path_buttons()
@@ -127,6 +150,8 @@ class RcloneList:
         self.path_list = []
         self.iter_start = 0
         self.page_step = 1
+        self.select = False
+        self.selected_pathes = set()
 
     async def _event_handler(self):
         pfunc = partial(path_updates, obj=self)
@@ -166,12 +191,16 @@ class RcloneList:
             self.path_list[self.iter_start : LIST_LIMIT + self.iter_start]
         ):
             orig_index = index + self.iter_start
+            name = idict["Path"]
+            if name in self.selected_pathes or any(
+                p.endswith(f"/{name}") for p in self.selected_pathes
+            ):
+                name = f"✅ {name}"
             if idict["IsDir"]:
                 ptype = "fo"
-                name = idict["Path"]
             else:
                 ptype = "fi"
-                name = f"[{get_readable_file_size(idict['Size'])}] {idict['Path']}"
+                name = f"[{get_readable_file_size(idict['Size'])}] {name}"
             buttons.data_button(name, f"rcq pa {ptype} {orig_index}")
         if items_no > LIST_LIMIT:
             for i in [1, 2, 4, 6, 10, 30, 50, 100]:
@@ -189,6 +218,15 @@ class RcloneList:
                 )
         if self.list_status == "rcu" or len(self.path_list) > 0:
             buttons.data_button("Choose Current Path", "rcq cur", position="footer")
+        if self.list_status == "rcd":
+            buttons.data_button(
+                f"Select: {'Enabled' if self.select else 'Disabled'}",
+                "rcq select",
+                position="footer",
+            )
+        if len(self.selected_pathes) > 1:
+            buttons.data_button("Done With Selection", "rcq ds", position="footer")
+            buttons.data_button("Clear Selection", "rcq clear", position="footer")
         if self.list_status == "rcu":
             buttons.data_button("Set as Default Path", "rcq def", position="footer")
         if self.path or len(self._sections) > 1 or self._rc_user and self._rc_owner:

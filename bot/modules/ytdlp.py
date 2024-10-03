@@ -8,7 +8,7 @@ from yt_dlp import YoutubeDL
 
 from bot import DOWNLOAD_DIR, bot, config_dict, LOGGER, bot_loop
 from ..helper.ext_utils.bot_utils import (
-    handler_new_task,
+    new_task,
     sync_to_async,
     arg_parser,
     COMMAND_USAGE,
@@ -27,7 +27,7 @@ from ..helper.telegram_helper.message_utils import (
 )
 
 
-@handler_new_task
+@new_task
 async def select_format(_, query, obj):
     data = query.data.split()
     message = query.message
@@ -287,6 +287,8 @@ class YtDlp(TaskListener):
         qual = ""
 
         args = {
+            "-doc": False,
+            "-med": False,
             "-s": False,
             "-b": False,
             "-z": False,
@@ -308,6 +310,7 @@ class YtDlp(TaskListener):
             "-ca": "",
             "-cv": "",
             "-ns": "",
+            "-tl": "",
         }
 
         arg_parser(input_list[1:], args)
@@ -334,6 +337,9 @@ class YtDlp(TaskListener):
         self.convert_video = args["-cv"]
         self.name_sub = args["-ns"]
         self.mixed_leech = args["-ml"]
+        self.thumbnail_layout = args["-tl"]
+        self.as_doc = args["-doc"]
+        self.as_med = args["-med"]
 
         is_bulk = args["-b"]
         folder_name = args["-m"]
@@ -400,7 +406,7 @@ class YtDlp(TaskListener):
             yt_opts = opt.split("|")
             for ytopt in yt_opts:
                 key, value = map(str.strip, ytopt.split(":", 1))
-                if key == "postprocessors":
+                if key in ["postprocessors", "download_ranges"]:
                     continue
                 if key == "format" and not self.select:
                     if value.startswith("ba/b-"):
